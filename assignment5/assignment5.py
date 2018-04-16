@@ -25,9 +25,10 @@ class Parser:
 class PCFGParser(Parser):
 
     def train(self, train_trees):
-        train_trees=[TreeBinarization.binarize_tree(tree) for tree in train_trees]    
-        self.lexicon = Lexicon(train_trees)
-        self.grammar = Grammar(train_trees)
+        train_trees=[TreeBinarization.binarize_tree(tree) for tree in train_trees]
+        self.lexicon = Lexicon(train_trees)  #get_all_tags,score_tagging
+        self.grammar = Grammar(train_trees)  #get_unary_rules_by_child, get_binary_rules_by_left_child
+        #rules have parent,score,left/right_child
 
 
     def get_best_parse(self, sentence):
@@ -36,6 +37,34 @@ class PCFGParser(Parser):
         'sentence' is a list of strings (words) that form a sentence.
         """
         # TODO: implement this method
+        nonterms = self.lexicon.get_all_tags()
+
+        score = collections.defaultdict(lambda:collections.defaultdict(lambda:0))
+        for i,w in enumerate(sentence):
+            for A in nonterms:
+                prob = self.lexicon.score_tagging(w,A)
+                if prob > 0:
+                    score[(i,i+1)][A] = prob
+        back  = collections.defaultdict(lambda:collections.defaultdict(lambda:0))
+
+        for i in range(len(sentence)):
+            for A in nonterms:
+                if A in self.grammar.get_unary_rules_by_child(sentence[i]):
+                    score[(i,i+1)][A] = self.grammar.get_unary_rules_by_child(sentence[i]).score
+            added = True
+            while added:
+                added = False
+
+                for A in nonterms:
+                    for B in nonterms:
+                        prob = self.lexicon.score_tagging(A,B) * score[(i,i+1)][B]
+                        if prob > score[i][i+1][A]:
+                            score[(i,i+1)][A] = prob
+                            back[(i,i+1)][A] = B
+                            added = True
+
+            
+
 
         return None
 
@@ -136,7 +165,7 @@ class BaselineParser(Parser):
 
 
 class TreeBinarization:
-    
+
     @classmethod
     def binarize_tree(cls, tree):
         label = tree.label
@@ -453,8 +482,8 @@ def read_masc_trees(base_path, low=None, high=None):
 if __name__ == '__main__':
     opt_parser = optparse.OptionParser()
     opt_parser.add_option("--data", dest="data", default = "miniTest") #change default value to "masc"
-    opt_parser.add_option("--parser", dest="parser",default="BaselineParser") # change default value to "PCFGParser"
-    opt_parser.add_option("--maxLength", dest="max_length",default="20") 
+    opt_parser.add_option("--parser", dest="parser",default="PCFGParser") # change default value to "PCFGParser"
+    opt_parser.add_option("--maxLength", dest="max_length",default="20")
 
     (options, args) = opt_parser.parse_args()
     options = vars(options)
@@ -519,4 +548,3 @@ if __name__ == '__main__':
 
     print "Testing parser"
     test_parser(parser, test_trees, max_length)
-
