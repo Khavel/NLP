@@ -40,34 +40,63 @@ class PCFGParser(Parser):
         nonterms = self.lexicon.get_all_tags()
 
         score = collections.defaultdict(lambda:collections.defaultdict(lambda:0))
+        back  = collections.defaultdict(lambda:collections.defaultdict(lambda:[]))
         for i,w in enumerate(sentence):
             for A in nonterms:
                 prob = self.lexicon.score_tagging(w,A)
                 if prob > 0:
                     score[(i,i+1)][A] = prob
-        back  = collections.defaultdict(lambda:collections.defaultdict(lambda:0))
 
-        for i in range(len(sentence)):
-            for A in nonterms:
-                if A in self.grammar.get_unary_rules_by_child(sentence[i]):
-                    score[(i,i+1)][A] = self.grammar.get_unary_rules_by_child(sentence[i]).score
             added = True
             while added:
                 added = False
+                for j in range(len(nonterms)-1):
+                    A = nonterms[j]
+                    B = nonterms[j+1]
+                    prob = self.lexicon.score_tagging(B,A) * score[(i,i+1)][B]
+                    if prob > score[(i,i+1)][A]:
+                        score[(i,i+1)][A] = prob
+                        back[(i,i+1)][A] = B
+                        added = True
+        for span in range(2,len(sentence)):
+            for begin in range(len(sentence)-span):
+                end = begin + span
+                for split in range(begin+1,end-1):
+                    for i in range(len(nonterms)-2):
+                        A = nonterms[i]
+                        B = nonterms[i+1]
+                        C = nonterms[i+2]
 
-                for A in nonterms:
-                    for B in nonterms:
-                        prob = self.lexicon.score_tagging(A,B) * score[(i,i+1)][B]
-                        if prob > score[i][i+1][A]:
-                            score[(i,i+1)][A] = prob
-                            back[(i,i+1)][A] = B
+
+                        prob = score[(begin,end)][A] * score[(split,end)][C] * self.lexicon.score_tagging(A,B)
+                        if prob > score[(begin,end)][A]:
+                            score[(begin,end)][A] = prob
+                            back[(begin,end)][A] = (split,B,C)
+                added = True
+                while added:
+                    added = False
+                    for j in range(len(nonterms)-1):
+                        A = nonterms[j]
+                        B = nonterms[j+1]
+                        prob = self.lexicon.score_tagging(A,B) * score[(begin,end)][B]
+                        if prob > score[(begin,end)][A]:
+                            score[(begin,end)][A] = prob
+                            back[(begin,end)][A] = B
                             added = True
+        return Tree("ROOT",[Tree("Test",[])])
+"""
+    def buildTree(self,back,sentence,label = "ROOT",begin=0):
+        end = len(sentence)
+        lista = back[(begin,end)]
 
-            
-
-
-        return None
-
+        if len(lista) == 3:
+            leftChild = self.buildTree(back,sentence,lista[1],begin)
+            rightChild = self.buildTree(back,sentence,lista[2],begin)
+            return Tree(label,[leftChild,rightChild])
+        else:
+            child = self.buildTree(back,sentence,lista[0],begin)
+            return Tree(label,child)
+"""
 
 class BaselineParser(Parser):
 
